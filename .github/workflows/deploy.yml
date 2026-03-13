@@ -9,8 +9,34 @@ env:
   IMAGE_NAME: saib-api
 
 jobs:
+  config-check:
+    name: Validate CD Secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check required secrets
+        env:
+          HAS_ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER != '' }}
+          HAS_ACR_USERNAME: ${{ secrets.ACR_USERNAME != '' }}
+          HAS_ACR_PASSWORD: ${{ secrets.ACR_PASSWORD != '' }}
+          HAS_APP_NAME_DEV: ${{ secrets.AZURE_APP_SERVICE_NAME_DEV != '' }}
+          HAS_PUBLISH_PROFILE_DEV: ${{ secrets.AZURE_PUBLISH_PROFILE_DEV != '' }}
+          HAS_APP_NAME_PROD: ${{ secrets.AZURE_APP_SERVICE_NAME_PROD != '' }}
+          HAS_PUBLISH_PROFILE_PROD: ${{ secrets.AZURE_PUBLISH_PROFILE_PROD != '' }}
+        run: |
+          if [ "$HAS_ACR_LOGIN_SERVER" != "true" ] || [ "$HAS_ACR_USERNAME" != "true" ] || [ "$HAS_ACR_PASSWORD" != "true" ]; then
+            echo "::warning::CD skipped: missing ACR secrets (ACR_LOGIN_SERVER/ACR_USERNAME/ACR_PASSWORD)."
+          fi
+          if [ "$HAS_APP_NAME_DEV" != "true" ] || [ "$HAS_PUBLISH_PROFILE_DEV" != "true" ]; then
+            echo "::warning::DEV deploy skipped: missing AZURE_APP_SERVICE_NAME_DEV or AZURE_PUBLISH_PROFILE_DEV."
+          fi
+          if [ "$HAS_APP_NAME_PROD" != "true" ] || [ "$HAS_PUBLISH_PROFILE_PROD" != "true" ]; then
+            echo "::warning::PROD deploy skipped: missing AZURE_APP_SERVICE_NAME_PROD or AZURE_PUBLISH_PROFILE_PROD."
+          fi
+
   build-and-push:
     name: Build & Push Docker Image
+    needs: config-check
+    if: ${{ secrets.ACR_LOGIN_SERVER != '' && secrets.ACR_USERNAME != '' && secrets.ACR_PASSWORD != '' }}
     runs-on: ubuntu-latest
     outputs:
       image-tag: ${{ steps.meta.outputs.image-tag }}
@@ -47,6 +73,7 @@ jobs:
   deploy-dev:
     name: Deploy to DEV
     needs: build-and-push
+    if: ${{ needs.build-and-push.result == 'success' && secrets.AZURE_APP_SERVICE_NAME_DEV != '' && secrets.AZURE_PUBLISH_PROFILE_DEV != '' }}
     runs-on: ubuntu-latest
     environment: dev
 
@@ -66,6 +93,7 @@ jobs:
   deploy-prod:
     name: Deploy to PROD
     needs: deploy-dev
+    if: ${{ needs.deploy-dev.result == 'success' && secrets.AZURE_APP_SERVICE_NAME_PROD != '' && secrets.AZURE_PUBLISH_PROFILE_PROD != '' }}
     runs-on: ubuntu-latest
     environment: production   # requires manual approval in GitHub Environments
 

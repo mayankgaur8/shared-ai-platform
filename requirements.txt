@@ -1,0 +1,49 @@
+# ── Web Framework ─────────────────────────────────────────────────────────────
+fastapi==0.135.1
+uvicorn[standard]==0.30.0
+uvloop==0.19.0
+
+# ── Data Validation ───────────────────────────────────────────────────────────
+pydantic==2.12.5
+pydantic-settings==2.13.1
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.30
+asyncpg==0.29.0
+alembic==1.13.1
+pgvector==0.3.2
+
+# ── Cache / Queue ─────────────────────────────────────────────────────────────
+redis[hiredis]==5.0.4
+celery==5.4.0
+
+# ── HTTP Client ───────────────────────────────────────────────────────────────
+httpx==0.28.1
+
+# ── AI Providers ──────────────────────────────────────────────────────────────
+openai==1.35.0
+
+# ── Templating ────────────────────────────────────────────────────────────────
+jinja2==3.1.4
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+structlog==24.1.0
+
+# ── Observability ────────────────────────────────────────────────────────────
+opentelemetry-api==1.25.0
+opentelemetry-sdk==1.25.0
+opentelemetry-instrumentation-fastapi==0.46b0
+opentelemetry-instrumentation-sqlalchemy==0.46b0
+opentelemetry-exporter-otlp==1.25.0
+
+# ── Document Parsing ──────────────────────────────────────────────────────────
+pypdf2==3.0.1
+python-docx==1.1.2
+
+# ── Azure Storage ─────────────────────────────────────────────────────────────
+azure-storage-blob==12.20.0

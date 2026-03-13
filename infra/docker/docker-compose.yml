@@ -1,0 +1,141 @@
+version: "3.9"
+
+# ── Shared environment ────────────────────────────────────────────────────────
+x-common-env: &common-env
+  DATABASE_URL: postgresql+asyncpg://saib:saib@postgres:5432/saib
+  REDIS_URL: redis://redis:6379/0
+  OLLAMA_BASE_URL: http://ollama:11434
+  JWT_SECRET: dev-only-change-in-production-min-32-chars
+  ENVIRONMENT: dev
+  DEBUG: "true"
+
+services:
+
+  # ── API Server ──────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../app:/app/app          # hot reload: code changes apply instantly
+      - ../../migrations:/app/migrations
+      - ../../alembic.ini:/app/alembic.ini
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [saib-net]
+    restart: unless-stopped
+
+  # ── Celery Worker ───────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.dev
+    command: celery -A app.jobs.celery_app worker --loglevel=info --concurrency=2 -Q default,embedding,memory
+    volumes:
+      - ../../app:/app/app
+    environment:
+      <<: *common-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks: [saib-net]
+    restart: unless-stopped
+
+  # ── Celery Beat (scheduled tasks) ───────────────────────────────────────────
+  scheduler:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.dev
+    command: celery -A app.jobs.celery_app beat --loglevel=info
+    volumes:
+      - ../../app:/app/app
+    environment:
+      <<: *common-env
+    depends_on: [redis]
+    networks: [saib-net]
+    restart: unless-stopped
+
+  # ── PostgreSQL with pgvector ──────────────────────────────────────────────
+  # pull_policy: if_not_present — only pulls from Docker Hub if image is not
+  # already in local cache. Avoids TLS timeout on repeated `docker compose up`.
+  postgres:
+    image: pgvector/pgvector:pg16
+    pull_policy: if_not_present
+    environment:
+      POSTGRES_DB: saib
+      POSTGRES_USER: saib
+      POSTGRES_PASSWORD: saib
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saib -d saib"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [saib-net]
+
+  # ── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    pull_policy: if_not_present
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [saib-net]
+
+  # ── Ollama (local LLM server) ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    pull_policy: if_not_present
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks: [saib-net]
+    restart: unless-stopped
+    # GPU support (requires nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── Flower (Celery monitoring UI) ────────────────────────────────────────
+  flower:
+    image: mher/flower:2.0
+    pull_policy: if_not_present
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+    depends_on: [redis]
+    networks: [saib-net]
+
+volumes:
+  pg_data:
+  redis_data:
+  ollama_data:
+
+networks:
+  saib-net:
+    driver: bridge

@@ -28,13 +28,49 @@ class Settings(BaseSettings):
 
     # Ollama
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_DEFAULT_MODEL: str = "llama3.2"
+    OLLAMA_DEFAULT_MODEL: str = "llama3.2"   # legacy key kept for backwards compat
     OLLAMA_TIMEOUT: int = 120
 
     # OpenAI (optional — used as fallback)
     OPENAI_API_KEY: str = ""
     OPENAI_DEFAULT_MODEL: str = "gpt-4o-mini"
     OPENAI_TIMEOUT: int = 60
+
+    # ── Hybrid AI Router ───────────────────────────────────────────────────────
+
+    # Default provider when no routing rule matches
+    AI_PROVIDER_DEFAULT: str = "ollama"   # ollama | cheap_api | premium_api
+
+    # Ollama provider
+    OLLAMA_MODEL_DEFAULT: str = "llama3.2"
+    AI_TIMEOUT_OLLAMA_MS: int = 120_000    # 2 minutes (ms)
+
+    # Cheap cloud API provider (OpenAI-compatible endpoint, e.g. Groq, Together AI)
+    CHEAP_API_BASE_URL: str = "https://api.groq.com/openai/v1"
+    CHEAP_API_KEY: str = ""
+    CHEAP_API_MODEL_DEFAULT: str = "llama3-8b-8192"
+    AI_TIMEOUT_CHEAP_MS: int = 30_000      # 30 seconds (ms)
+    CHEAP_API_COST_PER_1K_INPUT: float  = 0.0001   # USD per 1K input tokens
+    CHEAP_API_COST_PER_1K_OUTPUT: float = 0.0001   # USD per 1K output tokens
+
+    # Premium cloud API provider (OpenAI GPT-4 or compatible)
+    PREMIUM_API_BASE_URL: str = "https://api.openai.com/v1"
+    PREMIUM_API_KEY: str = ""
+    PREMIUM_API_MODEL_DEFAULT: str = "gpt-4o-mini"
+    AI_TIMEOUT_PREMIUM_MS: int = 60_000    # 60 seconds (ms)
+    PREMIUM_API_COST_PER_1K_INPUT: float  = 0.005   # USD per 1K input tokens
+    PREMIUM_API_COST_PER_1K_OUTPUT: float = 0.015   # USD per 1K output tokens
+
+    # Budget control
+    AI_BUDGET_MONTHLY_LIMIT: float = 0.0   # 0 = no limit; set e.g. 50.0 for $50/month cap
+
+    # Response caching
+    AI_CACHE_ENABLED: bool = True
+    REDIS_TTL_AI_RESPONSE: int = 300        # seconds to cache AI responses
+
+    # Security — internal app API key auth
+    AI_REQUIRE_APP_KEY: bool = False        # set True in production
+    AI_INTERNAL_APP_KEYS: str = ""          # comma-separated keys for calling apps
 
     # Azure Storage
     AZURE_STORAGE_ACCOUNT: str = ""

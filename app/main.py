@@ -28,6 +28,7 @@ from app.memory.router import router as memory_router
 from app.templates.router import router as templates_router
 from app.analytics.router import router as analytics_router
 from app.admin.router import router as admin_router
+from app.ai_router.router import router as ai_router
 
 settings = get_settings()
 
@@ -105,6 +106,7 @@ app.include_router(memory_router,        prefix="/v1/memory",      tags=["memory
 app.include_router(templates_router,     prefix="/v1/templates",   tags=["templates"])
 app.include_router(analytics_router,     prefix="/v1/analytics",   tags=["analytics"])
 app.include_router(admin_router,         prefix="/v1/admin",       tags=["admin"])
+app.include_router(ai_router,            prefix="/v1/ai",          tags=["ai-router"])
 
 
 # ── Platform endpoints ────────────────────────────────────────────────────────

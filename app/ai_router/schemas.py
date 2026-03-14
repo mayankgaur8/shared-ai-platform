@@ -24,6 +24,7 @@ class TaskType(str, Enum):
     # Primary task types (from spec)
     GRAMMAR_CORRECTION        = "grammar_correction"
     ENGLISH_CONVERSATION      = "english_conversation"
+    ENGLISH_COACH_CHAT        = "english_coach_chat"
     ASSIGNMENT_GENERATION     = "assignment_generation"
     MCQ_GENERATION            = "mcq_generation"
     QUESTION_PAPER_GENERATION = "question_paper_generation"

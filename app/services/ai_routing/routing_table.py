@@ -117,6 +117,15 @@ ROUTING_TABLE: dict[str, RoutingEntry] = {
         description="Resume review — contextual understanding; Cheap API as primary.",
     ),
 
+    "english_coach_chat": RoutingEntry(
+        chain=[CH, O, PR],
+        low_chain=[O, CH, PR],
+        high_chain=[PR, CH, O],
+        min_tokens_for_cheap=20,
+        max_tokens_for_ollama=3000,
+        description="Conversational English coaching — Cheap API (Groq) first for speed, Ollama fallback, Premium last resort.",
+    ),
+
     # ── Additional task types ──────────────────────────────────────────────────
 
     "summarization": RoutingEntry(

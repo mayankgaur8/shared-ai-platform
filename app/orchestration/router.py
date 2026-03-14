@@ -6,12 +6,14 @@ end-to-end before the full WorkflowExecutor is wired up.
 Replace the body of each handler with WorkflowExecutor.execute(...)
 once the DB models and prompt registry are populated.
 """
+import json
+import re
 import time
 import httpx
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Any, Optional
 
 from app.config.settings import get_settings
 
@@ -137,6 +139,29 @@ WORKFLOW_PROMPTS: dict[str, tuple[str, str]] = {
         "Subject: {subject}. Duration: {duration}. Total marks: {total_marks}. "
         "Include sections with different question types. Return as JSON.",
     ),
+    "english_coach_chat": (
+        "You are a warm, encouraging English language coach helping learners improve their English. "
+        "When the learner sends a message, you must:\n"
+        "1. Reply conversationally in simple, friendly English suited to their level.\n"
+        "2. Gently identify any grammar mistakes — be encouraging, never harsh.\n"
+        "3. Briefly explain each mistake and give the corrected phrase.\n"
+        "4. If the learner's sentence needs improvement, provide a cleaner version.\n"
+        "5. Ask exactly one short follow-up practice question to keep them engaged.\n\n"
+        "Always respond with valid JSON only — no text outside the JSON block.\n"
+        "Required JSON format:\n"
+        "{\n"
+        '  "reply": "Your friendly, encouraging reply to the learner",\n'
+        '  "corrections": [\n'
+        '    {"original": "wrong phrase", "corrected": "correct phrase", "explanation": "brief reason"}\n'
+        "  ],\n"
+        '  "follow_up_question": "One short follow-up question for practice"\n'
+        "}\n"
+        'If there are no grammar mistakes, return "corrections" as an empty list [].',
+        "Topic: {topic}\n"
+        "Learner level: {level}\n"
+        "Goal: {goal}\n\n"
+        "Learner message: {user_message}",
+    ),
 }
 
 
@@ -148,6 +173,34 @@ def _build_prompt(template: str, inputs: dict) -> str:
         return template  # return unformatted if variables missing — model handles it gracefully
 
 
+def _parse_english_coach_response(raw: str, model_used: str) -> dict[str, Any]:
+    """
+    Parse the structured JSON output from the english_coach_chat workflow.
+    Falls back gracefully if the model returns malformed JSON.
+    """
+    _fallback = {"reply": raw, "corrections": [], "follow_up_question": "", "model_used": model_used}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        # Try to extract a JSON object embedded in surrounding text
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            logger.warning("english_coach_chat: no JSON block found in model output")
+            return _fallback
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError:
+            logger.warning("english_coach_chat: JSON parse failed after extraction")
+            return _fallback
+
+    return {
+        "reply":             data.get("reply", raw),
+        "corrections":       data.get("corrections", []),
+        "follow_up_question": data.get("follow_up_question", ""),
+        "model_used":        model_used,
+    }
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/generate")
@@ -156,6 +209,8 @@ async def generate(request: GenerateRequest):
     start = time.monotonic()
 
     workflow = request.workflow
+    logger.info("workflow_start workflow=%s session=%s", workflow, request.session_id)
+
     prompts = WORKFLOW_PROMPTS.get(workflow)
     if not prompts:
         available = list(WORKFLOW_PROMPTS.keys())
@@ -165,8 +220,14 @@ async def generate(request: GenerateRequest):
         )
 
     system_tmpl, user_tmpl = prompts
-    system_prompt = _build_prompt(system_tmpl, request.inputs)
-    user_prompt = _build_prompt(user_tmpl, request.inputs)
+
+    # Merge inputs, supplying defaults for optional fields per workflow
+    inputs = dict(request.inputs)
+    if workflow == "english_coach_chat":
+        inputs.setdefault("goal", "General English improvement")
+
+    system_prompt = _build_prompt(system_tmpl, inputs)
+    user_prompt = _build_prompt(user_tmpl, inputs)
 
     result = await _call_ollama(
         system=system_prompt,
@@ -175,11 +236,27 @@ async def generate(request: GenerateRequest):
     )
 
     latency_ms = int((time.monotonic() - start) * 1000)
-    logger.info("workflow=%s model=%s latency=%dms", workflow, result["model"], latency_ms)
+    model_used = f"ollama/{result['model']}"
+    logger.info("workflow=%s model=%s latency=%dms", workflow, model_used, latency_ms)
+
+    # ── Workflow-specific structured response ─────────────────────────────────
+    if workflow == "english_coach_chat":
+        parsed = _parse_english_coach_response(result["content"], model_used)
+        return {
+            "workflow": workflow,
+            **parsed,
+            "tokens_used": {
+                "input": result["input_tokens"],
+                "output": result["output_tokens"],
+            },
+            "latency_ms": latency_ms,
+            "cost_usd": 0.0,
+            "cached": False,
+        }
 
     return {
         "workflow": workflow,
-        "model_used": f"ollama/{result['model']}",
+        "model_used": model_used,
         "output": result["content"],
         "tokens_used": {
             "input": result["input_tokens"],

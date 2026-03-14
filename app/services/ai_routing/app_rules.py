@@ -75,6 +75,7 @@ APP_RULES: Dict[str, AppRule] = {
         task_policy_overrides={
             "grammar_correction":    RoutingPolicy.LOW_COST_FIRST,
             "english_conversation":  RoutingPolicy.BALANCED,
+            "english_coach_chat":    RoutingPolicy.LOW_COST_FIRST,  # Groq/phi3 first; premium only on fallback
         },
     ),
 

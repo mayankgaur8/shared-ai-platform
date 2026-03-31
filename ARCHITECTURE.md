@@ -126,7 +126,7 @@ The system is organized into 8 horizontal layers:
 | **API Gateway** | SSL termination, rate limiting, API key auth, request routing to correct service |
 | **Auth Service** | JWT/OAuth2 validation, app-level identity (each client app has its own app_id + secret), RBAC for users |
 | **Orchestration Engine** | The brain — receives workflow requests, selects prompts, triggers safety checks, calls model router, stores results |
-| **Workflow Executor** | Executes named workflows (e.g., `quiz_generation`, `mock_interview`) using registered workflow definitions |
+| **Workflow Executor** | Executes named workflows (e.g., `quiz_generation`, `mock_interview_chat`, `english_coach_chat`) using registered workflow definitions |
 | **Prompt Registry** | Stores, versions, and renders prompt templates with variable injection |
 | **Safety Middleware** | Pre-checks input for injection/jailbreak, post-checks output for harmful content, applies per-app policies |
 | **Model Router** | Selects the best model for the task, handles fallbacks, enforces per-app and per-user model preferences |
@@ -284,6 +284,7 @@ shared-ai-backend/
 │   │   ├── mcq_generation.py
 │   │   ├── interview_questions.py
 │   │   ├── mock_interview_chat.py
+│   │   ├── english_coach_chat.py
 │   │   ├── resume_analysis.py
 │   │   ├── health_chatbot.py
 │   │   ├── astrology_insights.py
@@ -969,6 +970,47 @@ POST /v1/chat/stream            # Streaming chat
   "cached": false
 }
 ```
+
+Example request for `english_coach_chat`:
+```json
+{
+  "workflow": "english_coach_chat",
+  "inputs": {
+    "topic": "Daily routines",
+    "user_message": "Yesterday I goed to market and buyed many things.",
+    "level": "beginner",
+    "goal": "Improve past tense"
+  }
+}
+```
+
+Example structured response for `english_coach_chat`:
+```json
+{
+  "workflow": "english_coach_chat",
+  "workflow_type": "english_learning",
+  "reply": "Great effort! Two small fixes below.",
+  "corrections": [
+    {
+      "original": "goed",
+      "corrected": "went",
+      "explanation": "irregular verb"
+    }
+  ],
+  "follow_up_question": "What did you do last weekend?",
+  "model_used": "ollama/llama3.2",
+  "tokens_used": { "input": 50, "output": 80 },
+  "latency_ms": 123,
+  "cost_usd": 0.0,
+  "cached": false
+}
+```
+
+Implementation notes:
+- `goal` is optional and defaults safely to `General English improvement` when omitted.
+- This workflow returns a structured response instead of the generic `output` field used by the other current stub workflow responses.
+- If the model output is malformed, the backend first tries to extract JSON from surrounding prose and otherwise falls back to raw text in `reply` with empty `corrections` and an empty `follow_up_question`.
+- No new environment variables are required for this workflow.
 
 **POST /v1/chat**
 ```json

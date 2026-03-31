@@ -24,7 +24,7 @@ Swap a model once → every app automatically uses the new one. No per-app code 
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Complete system design, tech stack, DB schema, API design, all 15 sections |
 | [CODE_EXAMPLES.md](./CODE_EXAMPLES.md) | Starter code for all core modules (adapters, router, safety, memory, RAG) |
 | [DIAGRAMS.md](./DIAGRAMS.md) | 12 Mermaid system diagrams (architecture, request flow, RAG, memory, safety, deployment) |
-| [PROMPTS_SEED.md](./PROMPTS_SEED.md) | Ready-to-use prompt templates for all 8 workflows |
+| [PROMPTS_SEED.md](./PROMPTS_SEED.md) | Ready-to-use prompt templates for all 9 workflows |
 
 ---
 
@@ -101,6 +101,69 @@ Observability: structlog + OpenTelemetry + Grafana
 | `resume_analysis` | ATS scoring + improvement suggestions | Resume Builder |
 | `health_chatbot` | Wellness chatbot with strict guardrails | Health Assistant |
 | `astrology_insights` | Personalized astrology readings | Astrology App |
+| `english_coach_chat` | Conversational English coaching with corrections and one follow-up question | English Learning |
+
+---
+
+## English Coach Workflow
+
+`english_coach_chat` is a structured chat workflow for English learners. It returns a friendly reply, validated correction items, and one follow-up practice question.
+
+`goal` is optional for this workflow. If it is omitted, the backend safely defaults it to `General English improvement` before rendering the prompt.
+
+If the model output is malformed, the backend falls back gracefully at a high level:
+- it first tries to extract a JSON object if the model wrapped it in extra prose
+- if parsing still fails, it returns the raw model text as `reply`
+- `corrections` becomes `[]` and `follow_up_question` becomes `""`
+
+No new environment variables are required for this workflow; it uses the existing Ollama, routing, timeout, and cache settings already documented in [.env.example](./.env.example).
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8000/v1/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "workflow": "english_coach_chat",
+    "inputs": {
+      "topic": "Daily routines",
+      "user_message": "Yesterday I goed to market and buyed many things.",
+      "level": "beginner",
+      "goal": "Improve past tense"
+    }
+  }'
+```
+
+### Example Structured Response
+
+```json
+{
+  "workflow": "english_coach_chat",
+  "workflow_type": "english_learning",
+  "reply": "Great effort! Two small fixes below.",
+  "corrections": [
+    {
+      "original": "goed",
+      "corrected": "went",
+      "explanation": "irregular verb"
+    },
+    {
+      "original": "buyed",
+      "corrected": "bought",
+      "explanation": "irregular verb"
+    }
+  ],
+  "follow_up_question": "What did you do last weekend?",
+  "model_used": "ollama/llama3.2",
+  "tokens_used": {
+    "input": 50,
+    "output": 80
+  },
+  "latency_ms": 123,
+  "cost_usd": 0.0,
+  "cached": false
+}
+```
 
 ---
 

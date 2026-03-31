@@ -356,6 +356,7 @@ TASK_ROUTING_RULES = {
     "resume_analysis":        {"preferred_tags": ["reasoning", "long_context"],  "fallback_tags": ["reasoning"]},
     "health_chatbot":         {"preferred_tags": ["safe", "instruction"],        "fallback_tags": ["general"]},
     "astrology_insights":     {"preferred_tags": ["creative", "chat"],           "fallback_tags": ["general"]},
+    "english_coach_chat":     {"preferred_tags": ["chat", "instruction"],        "fallback_tags": ["general"]},
 }
 
 TIER_ROUTING_RULES = {
@@ -1021,6 +1022,7 @@ from app.workflows.astrology_insights import AstrologyInsightsWorkflow
 from app.workflows.interview_questions import InterviewQuestionsWorkflow
 from app.workflows.mcq_generation import MCQGenerationWorkflow
 from app.workflows.question_paper import QuestionPaperWorkflow
+from app.workflows.english_coach_chat import EnglishCoachChatWorkflow
 
 WORKFLOW_REGISTRY = {
     "quiz_generation":        QuizGenerationWorkflow,
@@ -1032,8 +1034,51 @@ WORKFLOW_REGISTRY = {
     "astrology_insights":     AstrologyInsightsWorkflow,
     "mcq_generation":         MCQGenerationWorkflow,
     "question_paper":         QuestionPaperWorkflow,
+    "english_coach_chat":     EnglishCoachChatWorkflow,
 }
 ```
+
+### Example request: `english_coach_chat`
+```json
+{
+  "workflow": "english_coach_chat",
+  "inputs": {
+    "topic": "Daily routines",
+    "user_message": "Yesterday I goed to market and buyed many things.",
+    "level": "beginner",
+    "goal": "Improve past tense"
+  }
+}
+```
+
+`goal` is optional. The current implementation safely defaults it when omitted.
+
+### Example response: `english_coach_chat`
+```json
+{
+  "workflow": "english_coach_chat",
+  "workflow_type": "english_learning",
+  "reply": "Great effort! Two small fixes below.",
+  "corrections": [
+    {
+      "original": "goed",
+      "corrected": "went",
+      "explanation": "irregular verb"
+    }
+  ],
+  "follow_up_question": "What did you do last weekend?",
+  "model_used": "ollama/llama3.2",
+  "tokens_used": {
+    "input": 50,
+    "output": 80
+  },
+  "latency_ms": 123,
+  "cost_usd": 0.0,
+  "cached": false
+}
+```
+
+If the model does not return valid JSON, the implementation falls back by using the raw text as `reply` and returning empty `corrections` plus an empty `follow_up_question`.
 
 ---
 

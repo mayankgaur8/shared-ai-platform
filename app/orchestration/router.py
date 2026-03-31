@@ -52,7 +52,9 @@ async def _call_ollama(system: str, user: str, model: str | None = None) -> dict
         "stream": False,
     }
     try:
-        async with httpx.AsyncClient(timeout=settings.OLLAMA_TIMEOUT) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(float(settings.OLLAMA_TIMEOUT), connect=10.0)
+        ) as client:
             resp = await client.post(f"{settings.OLLAMA_BASE_URL}/api/chat", json=payload)
             resp.raise_for_status()
             data = resp.json()
@@ -165,6 +167,23 @@ WORKFLOW_PROMPTS: dict[str, tuple[str, str]] = {
 }
 
 
+# ── Workflow type tags (for analytics, cost attribution, A/B testing) ─────────
+# Tag every workflow with a coarse domain so downstream analytics can group by
+# product area without parsing individual workflow names.
+_WORKFLOW_TYPES: dict[str, str] = {
+    "quiz_generation":          "education",
+    "assignment_generation":    "education",
+    "mcq_generation":           "education",
+    "question_paper":           "education",
+    "mock_interview_chat":      "career",
+    "interview_questions":      "career",
+    "resume_analysis":          "career",
+    "health_chatbot":           "health",
+    "astrology_insights":       "entertainment",
+    "english_coach_chat":       "english_learning",
+}
+
+
 def _build_prompt(template: str, inputs: dict) -> str:
     """Simple .format() substitution — replace with Jinja2 renderer once prompt registry is live."""
     try:
@@ -193,11 +212,27 @@ def _parse_english_coach_response(raw: str, model_used: str) -> dict[str, Any]:
             logger.warning("english_coach_chat: JSON parse failed after extraction")
             return _fallback
 
+    # Validate corrections — guard against model returning wrong shape (e.g. list of strings)
+    raw_corrections = data.get("corrections", [])
+    if not isinstance(raw_corrections, list):
+        logger.warning("english_coach_chat: corrections field is not a list, discarding")
+        raw_corrections = []
+    validated_corrections = []
+    for item in raw_corrections:
+        if isinstance(item, dict):
+            validated_corrections.append({
+                "original":    item.get("original", ""),
+                "corrected":   item.get("corrected", ""),
+                "explanation": item.get("explanation", ""),
+            })
+        else:
+            logger.warning("english_coach_chat: skipping malformed correction item: %r", item)
+
     return {
-        "reply":             data.get("reply", raw),
-        "corrections":       data.get("corrections", []),
+        "reply":              data.get("reply", raw),
+        "corrections":        validated_corrections,
         "follow_up_question": data.get("follow_up_question", ""),
-        "model_used":        model_used,
+        "model_used":         model_used,
     }
 
 
@@ -237,21 +272,25 @@ async def generate(request: GenerateRequest):
 
     latency_ms = int((time.monotonic() - start) * 1000)
     model_used = f"ollama/{result['model']}"
-    logger.info("workflow=%s model=%s latency=%dms", workflow, model_used, latency_ms)
+    logger.info(
+        "workflow=%s workflow_type=%s model=%s latency=%dms",
+        workflow, _WORKFLOW_TYPES.get(workflow, "general"), model_used, latency_ms,
+    )
 
     # ── Workflow-specific structured response ─────────────────────────────────
     if workflow == "english_coach_chat":
         parsed = _parse_english_coach_response(result["content"], model_used)
         return {
-            "workflow": workflow,
+            "workflow":      workflow,
+            "workflow_type": "english_learning",
             **parsed,
             "tokens_used": {
-                "input": result["input_tokens"],
+                "input":  result["input_tokens"],
                 "output": result["output_tokens"],
             },
             "latency_ms": latency_ms,
-            "cost_usd": 0.0,
-            "cached": False,
+            "cost_usd":   0.0,
+            "cached":     False,
         }
 
     return {

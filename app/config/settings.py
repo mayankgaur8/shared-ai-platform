@@ -96,7 +96,7 @@ class Settings(BaseSettings):
     MAX_SESSION_MESSAGES: int = 20
     MAX_RAG_CHUNKS: int = 5
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "case_sensitive": True}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "case_sensitive": True, "extra": "ignore"}
 
 
 @lru_cache()
